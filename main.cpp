@@ -58,6 +58,7 @@
 
 
 DigitalOut led1(LED1_PIN);
+DigitalOut red_led(PC_8);
 DigitalIn button(BUTTON1_PIN);
 DigitalOut motor_A(PB_7); //stromecek
 DigitalOut motor_B(PB_8); //kvetinace
@@ -88,28 +89,8 @@ int main()
         //trigger_manual = button.read();
 
         if ((timenow - heartbeatTime) > HBLED_TIME_MS ) {
-            led1 = !led1;
+            red_led = !red_led;
             heartbeatTime = timenow;
-        }
-
-        if (timenow > motor_Aon) {
-            motor_A = 1;
-            motor_Aoff = timenow + A_RUNTIME_STROMEK;
-            motor_Aon = timenow + DAY_IN_MS;
-        }
-        if (timenow > motor_Aoff) {
-            motor_A = 0;
-            motor_Bon = timenow + BUFFER_TIME;
-            motor_Aoff = timenow + DAY_IN_MS + BUFFER_TIME;
-        }
-        if (timenow > motor_Bon) {
-            motor_B = 1;
-            motor_Boff = timenow + A_RUNTIME_STROMEK;
-            motor_Bon = timenow + DAY_IN_MS + BUFFER_TIME;
-        }
-        if (timenow > motor_Boff) {
-            motor_B = 0;
-            motor_Boff = timenow + DAY_IN_MS + BUFFER_TIME;
         }
 
         HAL_Delay(MAIN_LOOP_DELAY_MS);
