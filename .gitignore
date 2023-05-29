@@ -1,3 +1,6 @@
 BUILD
 BUILD/*
 .github
+.mbed
+mbed-os
+I2CTextLCD/.hg

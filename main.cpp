@@ -25,6 +25,9 @@
 #include "mbed.h"
 #include <cstdint>
 
+#include "TextLCD.h"
+
+
 #define MY_VERSION_MAJOR 1
 #define MY_VERSION_MINOR 0
 
@@ -52,8 +55,8 @@
 // Standardized LED and button names
 #define LED1_PIN     PC_13   // blackpill on-board led
 #define BUTTON1_PIN  PA_0  // blackpill on-board button
-#define HW_SERIAL_TX_PIN PA_9
-#define HW_SERIAL_RX_PIN PA_10
+#define HW_SERIAL_TX_PIN PA_2
+#define HW_SERIAL_RX_PIN PA_3
 
 
 
@@ -64,6 +67,8 @@ DigitalOut motor_A(PB_7); //stromecek
 DigitalOut motor_B(PB_8); //kvetinace
 /*---------------------------*/
 
+// SDA // SCL // addr // type           
+TextLCD lcd(PA_10, PA_9, 0x4E, TextLCD::LCD16x2);
 
 int main()
 {
@@ -82,6 +87,29 @@ int main()
 
     bool trigger_manual;
 
+    int count=0;
+    lcd.printf("Hi mbed World!\n");
+    
+    HAL_Delay(1000);
+    lcd.cls();
+    //lcd.locate(1,2);
+    lcd.locate(0, 0);
+    lcd.putc('A');
+    lcd.locate(0, 1);
+    lcd.putc('B');
+    lcd.locate(2, 0);
+    lcd.putc('2');
+    lcd.locate(2, 1);
+    lcd.putc('2');
+    lcd.locate(15, 0);
+    lcd.putc('H');
+    lcd.locate(15, 1);
+    lcd.putc('L');
+
+    HAL_Delay(2000);
+    lcd.locate(0, 1);
+    lcd.printf("count: ");
+
     while (true)
     {
         timenow = HAL_GetTick();
@@ -91,6 +119,10 @@ int main()
         if ((timenow - heartbeatTime) > HBLED_TIME_MS ) {
             red_led = !red_led;
             heartbeatTime = timenow;
+
+            lcd.locate(8,1); 
+            lcd.printf("%3d",count++);
+            HAL_Delay(500); 
         }
 
         HAL_Delay(MAIN_LOOP_DELAY_MS);
