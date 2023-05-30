@@ -24,8 +24,11 @@
 
 #include "mbed.h"
 #include <cstdint>
+#include <cstdio>
 
-#define MY_VERSION_MAJOR 1
+#include "TextLCD.h"
+
+#define MY_VERSION_MAJOR 2
 #define MY_VERSION_MINOR 0
 
 #define MAIN_LOOP_DELAY_MS 50
@@ -62,7 +65,15 @@ DigitalOut red_led(PC_8);
 DigitalIn button(BUTTON1_PIN);
 DigitalOut motor_A(PB_7); //stromecek
 DigitalOut motor_B(PB_8); //kvetinace
+
+I2C i2c_lcd(PA_10,PA_9); // SDA, SCL
+
 /*---------------------------*/
+
+//I2C Portexpander PCF8574
+//TextLCD_I2C lcd(&i2c_lcd, 0x7E, TextLCD::LCD16x2); // I2C bus, PCF8574 Slaveaddress, LCD Type ok
+TextLCD_I2C lcd(&i2c_lcd, 0x4e, TextLCD::LCD16x2, TextLCD::HD44780); // I2C bus, PCF8574 addr, LCD Type, Ctrl Type
+
 
 
 int main()
@@ -82,6 +93,21 @@ int main()
 
     bool trigger_manual;
 
+    printf("init arm of Suijin: V%d.%d\r\n", MY_VERSION_MAJOR, MY_VERSION_MINOR);
+
+
+    lcd.setBacklight(TextLCD::LightOff);
+
+
+    HAL_Delay(1000);
+    
+
+lcd.rewind();
+
+lcd.printf("Bye now\r\n");
+
+lcd.setBacklight(TextLCD::LightOn);
+
     while (true)
     {
         timenow = HAL_GetTick();
@@ -91,6 +117,8 @@ int main()
         if ((timenow - heartbeatTime) > HBLED_TIME_MS ) {
             red_led = !red_led;
             heartbeatTime = timenow;
+            printf("tick tick %d\r\n", loopCount);
+            
         }
 
         HAL_Delay(MAIN_LOOP_DELAY_MS);

@@ -1,3 +1,5 @@
 BUILD
 BUILD/*
 .github
+.mbed
+TextLCD
