@@ -55,12 +55,12 @@
 TextLCD::TextLCD(PinName sda, PinName scl, int i2cAddress, LCDType type) : _i2c(sda, scl), _i2cAddress(i2cAddress) , _type(type){
    // _i2cAddress = i2cAddress;
     writeByte(E_ON,false);
-    HAL_Delay(15);        // Wait 15ms to ensure powered up
+    wait_us(15000);        // Wait 15ms to ensure powered up
 
     // send "Display Settings" 3 times (Only top nibble of 0x30 as we've got 4-bit bus)
     for (int i=0; i<3; i++) {
         writeByte(0x3, false);
-        wait_us(16450);  // this command takes 1.64ms, so wait for it
+        wait_us(1700);  // this command takes 1.64ms, so wait for it
     }
     writeByte(0x2, false);     // 4-bit mode
     wait_us(40);    // most instructions take 40us
@@ -79,7 +79,7 @@ void TextLCD::character(int column, int row, int c) {
 
 void TextLCD::cls() {
     writeCommand(0x01); // cls, and set cursor to 0
-    wait_us(16450);     // This command takes 1.64 ms
+    wait_us(1700);     // This command takes 1.64 ms
     locate(0, 0);
 }
 
@@ -129,10 +129,10 @@ void TextLCD::writeNibble(int data, bool rs) {
     data |= E_ON; // E on
     writeI2CByte(data);
     data ^= E_ON; // E off
-    
     wait_us(40);
     writeI2CByte(data);
     wait_us(1000);
+  //  wait_us(1000);
 }
 
 void TextLCD::writeByte(int data, bool rs) {

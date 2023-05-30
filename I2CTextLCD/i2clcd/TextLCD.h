@@ -28,7 +28,6 @@
 //#define E_ON 0x10
 //#define RS_ON 0x80
 
-
 #define E_ON 0x04
 #define RS_ON 0x01
 #define RW_ON 0x02
