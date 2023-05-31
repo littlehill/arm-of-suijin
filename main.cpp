@@ -24,6 +24,7 @@
 
 #include "mbed.h"
 #include <cstdint>
+#include <cstdio>
 
 #include "TextLCD.h"
 #include "ds3231.h"
@@ -90,6 +91,8 @@ TextLCD lcd(PA_10, PA_9, 0x4E, TextLCD::LCD16x2);
 //rtc object
 Ds3231 rtc(PA_10, PA_9);
 
+float rtcTempC = -120;
+
 void btn_debounce(unsigned char sel_read, unsigned char enter_read, bool * sel_out, bool * enter_out);
 void get_user_input(char* message, uint8_t min, uint8_t max, uint32_t* member);
 void get_user_input(char* message, uint8_t min, uint8_t max, bool* member);
@@ -122,6 +125,7 @@ int main()
 
     lcd.printf("Suijin v%d.%d\nEnter 2 start ->", VERSION_MAJOR, VERSION_MINOR);
 
+            
 rtc.set_cntl_stat_reg(rtc_control_status);
 
 
@@ -193,6 +197,10 @@ rtc.set_cntl_stat_reg(rtc_control_status);
     
     e_EVENT main_event = e_EVENT::EventNone;
 
+    rtc.get_time(&gl_time);
+    watter_time1 = gl_time;
+    add2times(&watter_time1, 0, 1, 0);
+
     HAL_Delay(1000);
     lcd.cls();
     //lcd.locate(1,2);
@@ -226,11 +234,17 @@ rtc.set_cntl_stat_reg(rtc_control_status);
                 lcd.putc('H');
                 white_led.write(true);
                 main_event = e_EVENT::EventTriggerWattering;
-                //add2times(&watter_time1, 0, 0, 35);
+                
+                add2times(&watter_time1 , 0, 2, 0);
+
             } else {
                 white_led.write(false);
                 lcd.putc('-');
             }
+
+            rtcTempC = ((rtc.get_temperature()>>6) / 4.0);
+            printf("temperature in C: %.2f\r\n", rtcTempC);
+
 
             process_state(main_event, e_BTN_EVENT::BtnNone);
             HAL_Delay(5);
