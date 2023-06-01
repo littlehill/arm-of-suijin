@@ -13,7 +13,7 @@ enum e_SUIJIN_STATE {
 
 enum e_BTN_EVENT {
     BtnNone = 0,
-    BtnPressedState,
+    BtnPressedSelect,
     BtnPressedEnter,
     BtnPressedBoth
 };
@@ -23,6 +23,11 @@ enum e_EVENT {
     EventTriggerWattering,
     EventOverheating,
     EventStopCmd
+};
+
+enum e_MENU_SCREEN {
+    ScrHome = 0,
+    ScrManualTrigger
 };
 
 #define MOTOR_ENABLE 1

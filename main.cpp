@@ -31,8 +31,8 @@
 
 #include "main_types.h"
 
-#define VERSION_MAJOR 0
-#define VERSION_MINOR 2
+#define VERSION_MAJOR 2
+#define VERSION_MINOR 0
 
 #define ESC 0x1B
 
@@ -56,9 +56,9 @@
 
 //first loop from POR
 #define FIRST_LOOP 10
-#define PAUSE_TIME 3
-#define A_RUNTIME_STROMEK 5
-#define B_RUNTIME_KVETINAC 2
+#define PAUSE_TIME 1
+#define A_RUNTIME_STROMEK 25
+#define B_RUNTIME_KVETINAC 36
 
 // Standardized LED and button names
 #define LED1_PIN        PC_13   // blackpill on-board led
@@ -67,22 +67,28 @@
 #define GREEN_LED_PIN   PB_7
 #define BLUE_LED_PIN    PB_8
 
+#define FAN_EN_PIN    PB_15
+
 // #define HW_SERIAL_TX_PIN PA_2
 // #define HW_SERIAL_RX_PIN PA_3
 
-#define SELECT_BTN_PIN  PB_5
-#define ENTER_BTN_PIN   PB_3
+#define SELECT_BTN_PIN  PA_15
+#define ENTER_BTN_PIN   PB_5
 
 
 
 DigitalOut red_led(RED_LED_PIN);
-DigitalOut white_led(WHITE_LED_PIN);
+DigitalOut blue_led(BLUE_LED_PIN);
 
 DigitalIn btn_select(SELECT_BTN_PIN);
-DigitalIn btn_enter(SELECT_BTN_PIN);
+DigitalIn btn_enter(ENTER_BTN_PIN);
 DigitalOut motor_A(GREEN_LED_PIN); //stromecek
-DigitalOut motor_B(BLUE_LED_PIN); //kvetinace
+DigitalOut motor_B(WHITE_LED_PIN); //kvetinace
+DigitalOut fan_en(FAN_EN_PIN);
 /*---------------------------*/
+
+bool flag_wattering_in_progress = false;
+e_MENU_SCREEN gl_menu_screen = e_MENU_SCREEN::ScrHome;
 
 
 // SDA // SCL // addr // type           
@@ -98,7 +104,11 @@ void get_user_input(char* message, uint8_t min, uint8_t max, uint32_t* member);
 void get_user_input(char* message, uint8_t min, uint8_t max, bool* member);
 int compare_times(ds3231_time_t *p_tA, ds3231_time_t *p_tB);
 void add2times(ds3231_time_t *p_target, uint32_t h_add, uint32_t m_add, uint32_t s_add);
-void process_state(e_EVENT event, e_BTN_EVENT inputBtn);
+void process_state(e_EVENT event);
+void process_fan(float temp);
+void update_screen(e_BTN_EVENT btn_input, ds3231_time_t *p_now, ds3231_time_t *p_target );
+void set_next_time(ds3231_time_t *p_target);
+
 
 int main()
 {
@@ -123,7 +133,7 @@ int main()
     ds3231_time_t rtc_time;
     ds3231_calendar_t rtc_calendar;
 
-    lcd.printf("Suijin v%d.%d\nEnter 2 start ->", VERSION_MAJOR, VERSION_MINOR);
+    lcd.printf("Suijin v%d.%d\nENTER for menu", VERSION_MAJOR, VERSION_MINOR);
 
             
 rtc.set_cntl_stat_reg(rtc_control_status);
@@ -183,25 +193,31 @@ rtc.set_cntl_stat_reg(rtc_control_status);
     char buffer[32];
     ds3231_time_t gl_time;
 
-    ds3231_time_t watter_time1;
+    ds3231_time_t next_wattering_time;
 
-    watter_time1.hours = 23;
-    watter_time1.minutes = 12;
-    watter_time1.seconds = 35;
+    next_wattering_time.hours = 23;
+    next_wattering_time.minutes = 12;
+    next_wattering_time.seconds = 35;
 
     bool trigger_manual;
 
     bool input_select, input_enter;
+    bool previous_select, previous_enter;
+
+    previous_enter = 0;
+    previous_select = 0;
+    input_select = 0;
+    input_enter = 0;
 
     int count=0;
     
     e_EVENT main_event = e_EVENT::EventNone;
 
     rtc.get_time(&gl_time);
-    watter_time1 = gl_time;
-    add2times(&watter_time1, 0, 1, 0);
+    next_wattering_time = gl_time;
+    set_next_time(&next_wattering_time);
 
-    HAL_Delay(1000);
+    HAL_Delay(4000);
     lcd.cls();
     //lcd.locate(1,2);
 
@@ -218,42 +234,44 @@ rtc.set_cntl_stat_reg(rtc_control_status);
             red_led = !red_led;
             heartbeatTime = timenow;
 
-            epoch_time = rtc.get_epoch();
             rtc.get_time(&gl_time);
 
-            lcd.locate(0,0);
-//            lcd.printf("epoch = %d\n", epoch_time);
-//            lcd.locate(0,1);
-//            lcd.printf("%s", ctime(&epoch_time));
-            lcd.printf("time: %2d:%02d:%02d", gl_time.hours, gl_time.minutes, gl_time.seconds);
-            lcd.locate(0,1);
-            lcd.printf("next: %2d:%02d:%02d", watter_time1.hours, watter_time1.minutes, watter_time1.seconds);
+            update_screen(e_BTN_EVENT::BtnNone, &gl_time, &next_wattering_time);
+            
+            //printf("select debug: %d\r\n", btn_select.read());
 
             lcd.locate(15,1);
-            if (compare_times(&gl_time, &watter_time1) == 0) { //gl_time has passed the wattering time
-                lcd.putc('H');
-                white_led.write(true);
+            if (compare_times(&gl_time, &next_wattering_time) == 0) { //gl_time has passed the wattering time
+                blue_led.write(true);
                 main_event = e_EVENT::EventTriggerWattering;
                 
-                add2times(&watter_time1 , 0, 2, 0);
+                set_next_time(&next_wattering_time);
 
             } else {
-                white_led.write(false);
-                lcd.putc('-');
+                blue_led.write(false);
             }
 
             rtcTempC = ((rtc.get_temperature()>>6) / 4.0);
-            printf("temperature in C: %.2f\r\n", rtcTempC);
+            process_fan(rtcTempC);
 
-
-            process_state(main_event, e_BTN_EVENT::BtnNone);
+            process_state(main_event);
             HAL_Delay(5);
             //new epoch time fx
         }
 
-        if (input_enter) {
-            watter_time1 = gl_time;
-            add2times(&watter_time1 , 0, 0, 21);
+        if ((previous_enter != input_enter)) {
+            previous_enter = input_enter;
+            printf("ENTER: %d\n",input_enter);
+            //enter pressed
+            if (input_enter==1)
+                update_screen(e_BTN_EVENT::BtnPressedEnter, &gl_time, &next_wattering_time);
+        }
+        if (previous_select != input_select) {
+            previous_select = input_select;
+            printf("SELECT: %d\n",input_select);
+            //select pressed
+            if (input_select==1)
+                update_screen(e_BTN_EVENT::BtnPressedSelect, &gl_time, &next_wattering_time);
         }
 
         HAL_Delay(MAIN_LOOP_DELAY_MS);
@@ -268,23 +286,22 @@ void btn_debounce(unsigned char sel_read, unsigned char enter_read, bool * sel_o
     static unsigned char loc_select = 0;
     static unsigned char loc_enter = 0;
 
-    const unsigned char mask = 0x0F;
+    const unsigned char mask = 0xFF;
 
     loc_select = (loc_select << 1) | (sel_read & 0x01);
     loc_enter = (loc_enter << 1) | (enter_read & 0x01);
 
 
-    if ((loc_select&mask) == mask)
+    if (loc_select == mask)
         *sel_out = true;
     else
         *sel_out = false;
 
-    if ((loc_enter&mask) == mask)
+    if (loc_enter == mask)
         *enter_out = true;
     else
         *enter_out = false;
 }
-
 
 /**********************************************************************
 * Function: get_user_input() 
@@ -406,7 +423,7 @@ void add2times(ds3231_time_t *p_target, uint32_t h_add, uint32_t m_add, uint32_t
 }
 
 
-void process_state(e_EVENT event, e_BTN_EVENT inputBtn) {
+void process_state(e_EVENT event) {
     static e_SUIJIN_STATE state = e_SUIJIN_STATE::WaitingForNextCycle;
 
     static time_t time_transition = 0;
@@ -417,13 +434,15 @@ void process_state(e_EVENT event, e_BTN_EVENT inputBtn) {
         case e_SUIJIN_STATE::InitSetup:
             time_transition = time_now + A_RUNTIME_STROMEK;
             state = e_SUIJIN_STATE::RunningPump_A;
+            flag_wattering_in_progress = true;
+            fan_en.write(MOTOR_ENABLE);
             printf("SMinf: Exit InitSetup\r\n");
             //break;
 
         case e_SUIJIN_STATE::RunningPump_A:
             motor_A.write(MOTOR_ENABLE);
             if (time_now > time_transition) {
-                time_transition = time_now + A_RUNTIME_STROMEK;
+                time_transition = time_now + PAUSE_TIME;
                 state = e_SUIJIN_STATE::Pause_A;
                 printf("SMinf: Exit Running PumpA\r\n");
             }
@@ -432,7 +451,7 @@ void process_state(e_EVENT event, e_BTN_EVENT inputBtn) {
         case e_SUIJIN_STATE::Pause_A:
             motor_A.write(MOTOR_DISABLE);
             if (time_now > time_transition) {
-                time_transition = time_now + PAUSE_TIME;
+                time_transition = time_now + B_RUNTIME_KVETINAC;
                 state = e_SUIJIN_STATE::RunningPump_B;
                 printf("SMinf: Exit Pause_A\r\n");
             }
@@ -441,7 +460,7 @@ void process_state(e_EVENT event, e_BTN_EVENT inputBtn) {
         case e_SUIJIN_STATE::RunningPump_B:
             motor_B.write(MOTOR_ENABLE);
             if (time_now > time_transition) {
-                time_transition = time_now + B_RUNTIME_KVETINAC;
+                time_transition = time_now + PAUSE_TIME;
                 state = e_SUIJIN_STATE::Pause_B;
                 printf("SMinf: Exit Running PumpB\r\n");
             }
@@ -450,7 +469,7 @@ void process_state(e_EVENT event, e_BTN_EVENT inputBtn) {
         case e_SUIJIN_STATE::Pause_B:
             motor_B.write(MOTOR_DISABLE);
             if (time_now > time_transition) {
-                time_transition = time_now + PAUSE_TIME;
+                //time_transition = time_now + PAUSE_TIME;
                 state = e_SUIJIN_STATE::Appendix;
                 printf("SMinf: Exit Pause_B\r\n");
             }
@@ -458,6 +477,8 @@ void process_state(e_EVENT event, e_BTN_EVENT inputBtn) {
 
         case e_SUIJIN_STATE::Appendix:
             state = e_SUIJIN_STATE::WaitingForNextCycle;
+            flag_wattering_in_progress = false;
+            fan_en.write(MOTOR_DISABLE);
             printf("SMinf: Exit Appendix\r\n");
             //break;
 
@@ -470,4 +491,99 @@ void process_state(e_EVENT event, e_BTN_EVENT inputBtn) {
     };
 
 return;
+}
+
+void process_fan(float tempC) {
+    bool fstatus = fan_en.read();
+    bool ftarget;
+
+    if (flag_wattering_in_progress) {
+        return;
+    }
+    ftarget = fstatus;
+    if (tempC > 34.0) {
+        ftarget = MOTOR_ENABLE;
+    }
+    if (tempC < 28.0) {
+        ftarget = MOTOR_DISABLE;
+    }
+
+    if (fstatus != ftarget) {
+        fan_en.write(ftarget);
+        printf("Fan updated to: %d at temp %.2f\r\n", ftarget, tempC);
+    }
+}
+
+void update_screen(e_BTN_EVENT btn_input, ds3231_time_t *p_now, ds3231_time_t *p_target ) {
+    static e_MENU_SCREEN screen_set = e_MENU_SCREEN::ScrHome;
+
+        // if (input_enter) {
+        //     next_wattering_time = gl_time;
+        //     add2times(&next_wattering_time , 0, 0, 21);
+        // }
+
+    switch (screen_set) {
+        case e_MENU_SCREEN::ScrHome:
+            lcd.locate(0,0);
+            lcd.printf("time: %2d:%02d:%02d  ", p_now->hours, p_now->minutes, p_now->seconds);
+            lcd.locate(0,1);
+            lcd.printf("next: %2d:%02d:%02d  ", p_target->hours, p_target->minutes, p_target->seconds);
+
+            if (btn_input == e_BTN_EVENT::BtnPressedEnter) {
+                screen_set = e_MENU_SCREEN::ScrManualTrigger;
+            }
+            if (btn_input == e_BTN_EVENT::BtnPressedSelect) {
+                //*p_target = *p_now;
+                set_next_time(p_target);
+            }
+            break;
+
+        case e_MENU_SCREEN::ScrManualTrigger:
+            lcd.locate(0,0);
+            lcd.printf("Entr= run in 15s");
+            lcd.locate(0,1);
+            lcd.printf("Esc = return    ");
+            if (btn_input == e_BTN_EVENT::BtnPressedEnter) {
+                //printf("Manual wattering trig.\r\n");
+                *p_target = *p_now;
+                add2times(p_target , 0, 0, 10);
+                screen_set = e_MENU_SCREEN::ScrHome;
+            }
+            if (btn_input == e_BTN_EVENT::BtnPressedSelect) {
+                screen_set = e_MENU_SCREEN::ScrHome;
+            }
+            break;
+        default:
+            printf("Screen update ERROR: unknown state\r\n");
+            break;
+    };
+
+    //printf("temperature in C: %.2f\r\n", rtcTempC);
+
+return;
+}
+
+void set_next_time(ds3231_time_t *p_target) {
+    if (p_target->hours > 20){
+        //after 9pm, next cycle is at 8:30am
+        p_target->hours=8;
+        p_target->minutes=30;
+        p_target->seconds=00;
+        return;
+    }
+    else if (p_target->hours > 13){
+        //after 2pm, next cycle is at 9pm
+        p_target->hours=21;
+        p_target->minutes=00;
+        p_target->seconds=00;
+        return;
+    }
+    else if (p_target->hours > 7){
+        //after Xam, next cycle is at 2:05pm
+        p_target->hours=14;
+        p_target->minutes=05;
+        p_target->seconds=00;
+        return;
+    }
+    return;
 }
