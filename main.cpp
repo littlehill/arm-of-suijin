@@ -32,7 +32,7 @@
 #include "main_types.h"
 
 #define VERSION_MAJOR 2
-#define VERSION_MINOR 0
+#define VERSION_MINOR 2
 
 #define ESC 0x1B
 
@@ -56,9 +56,10 @@
 
 //first loop from POR
 #define FIRST_LOOP 10
-#define PAUSE_TIME 1
-#define A_RUNTIME_STROMEK 25
-#define B_RUNTIME_KVETINAC 36
+#define PAUSE_TIME 2
+#define A_RUNTIME_STROMEK 20
+#define B_RUNTIME_KVETINAC 20
+#define C_RUNTIME_12VPUMP 16
 
 // Standardized LED and button names
 #define LED1_PIN        PC_13   // blackpill on-board led
@@ -66,6 +67,7 @@
 #define WHITE_LED_PIN   PC_6
 #define GREEN_LED_PIN   PB_7
 #define BLUE_LED_PIN    PB_8
+#define BIGPUMP12V_EN_PIN    PC_4
 
 #define FAN_EN_PIN    PB_15
 
@@ -84,6 +86,7 @@ DigitalIn btn_select(SELECT_BTN_PIN);
 DigitalIn btn_enter(ENTER_BTN_PIN);
 DigitalOut motor_A(GREEN_LED_PIN); //stromecek
 DigitalOut motor_B(WHITE_LED_PIN); //kvetinace
+DigitalOut big_pump_12V(BIGPUMP12V_EN_PIN); //12v pump for big manifold
 DigitalOut fan_en(FAN_EN_PIN);
 /*---------------------------*/
 
@@ -116,6 +119,7 @@ int main()
     unsigned int loopCount = 0;
     unsigned int heartbeatTime = 0;
     
+    printf("\r\nArm of Suijin v%d.%d\r\n", VERSION_MAJOR, VERSION_MINOR);
 
     uint32_t timenow = HAL_GetTick();
 
@@ -126,6 +130,11 @@ int main()
     
     time_t epoch_time;
 
+    big_pump_12V.write(MOTOR_DISABLE);
+    motor_A.write(MOTOR_DISABLE);
+    motor_B.write(MOTOR_DISABLE);
+    fan_en.write(MOTOR_DISABLE);
+
     //DS3231 rtc variables
 
     //default, use bit masks in ds3231.h for desired operation
@@ -133,10 +142,10 @@ int main()
     ds3231_time_t rtc_time;
     ds3231_calendar_t rtc_calendar;
 
-    lcd.printf("Suijin v%d.%d\nENTER for menu", VERSION_MAJOR, VERSION_MINOR);
+    lcd.printf("Suijin v%d.%d\ninitializing...", VERSION_MAJOR, VERSION_MINOR);
 
             
-rtc.set_cntl_stat_reg(rtc_control_status);
+    rtc.set_cntl_stat_reg(rtc_control_status);
 
 
 #ifdef FORCE_TIME_SETUP_MANUAL
@@ -217,9 +226,11 @@ rtc.set_cntl_stat_reg(rtc_control_status);
     next_wattering_time = gl_time;
     set_next_time(&next_wattering_time);
 
-    HAL_Delay(4000);
+    HAL_Delay(2000);
     lcd.cls();
     //lcd.locate(1,2);
+
+    printf("-- init done --\r\n");
 
     while (true)
     {
@@ -432,12 +443,31 @@ void process_state(e_EVENT event) {
 
     switch (state) {
         case e_SUIJIN_STATE::InitSetup:
-            time_transition = time_now + A_RUNTIME_STROMEK;
-            state = e_SUIJIN_STATE::RunningPump_A;
+            time_transition = time_now + C_RUNTIME_12VPUMP;
+            state = e_SUIJIN_STATE::RunningPump_12V;
             flag_wattering_in_progress = true;
             fan_en.write(MOTOR_ENABLE);
             printf("SMinf: Exit InitSetup\r\n");
             //break;
+
+        case e_SUIJIN_STATE::RunningPump_12V:
+            big_pump_12V.write(MOTOR_ENABLE);
+            if (time_now > time_transition) {
+                time_transition = time_now + PAUSE_TIME;
+                state = e_SUIJIN_STATE::Pause_12V;
+                printf("SMinf: Exit Running Pump12V\r\n");
+            }
+            break;
+
+        case e_SUIJIN_STATE::Pause_12V:
+            big_pump_12V.write(MOTOR_DISABLE);
+            if (time_now > time_transition) {
+                time_transition = time_now + A_RUNTIME_STROMEK;
+                state = e_SUIJIN_STATE::RunningPump_A;
+                printf("SMinf: Exit Pause_12V\r\n");
+            }
+            break;
+
 
         case e_SUIJIN_STATE::RunningPump_A:
             motor_A.write(MOTOR_ENABLE);
@@ -540,13 +570,14 @@ void update_screen(e_BTN_EVENT btn_input, ds3231_time_t *p_now, ds3231_time_t *p
 
         case e_MENU_SCREEN::ScrManualTrigger:
             lcd.locate(0,0);
-            lcd.printf("Entr= run in 15s");
+            lcd.printf("Entr= run in 10s");
             lcd.locate(0,1);
             lcd.printf("Esc = return    ");
             if (btn_input == e_BTN_EVENT::BtnPressedEnter) {
                 //printf("Manual wattering trig.\r\n");
                 *p_target = *p_now;
                 add2times(p_target , 0, 0, 10);
+                printf("Manual trigger. target-time +=10s\r\n");
                 screen_set = e_MENU_SCREEN::ScrHome;
             }
             if (btn_input == e_BTN_EVENT::BtnPressedSelect) {
@@ -571,19 +602,22 @@ void set_next_time(ds3231_time_t *p_target) {
         p_target->seconds=00;
         return;
     }
-    else if (p_target->hours > 13){
-        //after 2pm, next cycle is at 9pm
+    else if (p_target->hours > 7){
+        //after 8:30am, next cycle is at 9pm
         p_target->hours=21;
         p_target->minutes=00;
         p_target->seconds=00;
         return;
     }
-    else if (p_target->hours > 7){
-        //after Xam, next cycle is at 2:05pm
-        p_target->hours=14;
-        p_target->minutes=05;
-        p_target->seconds=00;
-        return;
+    else {
+        printf("ERROR: next time not set!\r\n");
     }
+    // else if (p_target->hours > 7){
+    //     //after Xam, next cycle is at 2:05pm
+    //     p_target->hours=14;
+    //     p_target->minutes=05;
+    //     p_target->seconds=00;
+    //     return;
+    // }
     return;
 }

@@ -7,7 +7,7 @@
         "target.printf_lib": "minimal-printf",
         "platform.minimal-printf-enable-floating-point": true,
         "platform.stdio-minimal-console-only": false,
-        "platform.stdio-baud-rate": 9600
+        "platform.stdio-baud-rate": 115200
       }
     }
 }

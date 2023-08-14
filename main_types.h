@@ -4,6 +4,8 @@
 enum e_SUIJIN_STATE {
     WaitingForNextCycle = 0,
     InitSetup,
+    RunningPump_12V,
+    Pause_12V,
     RunningPump_A,
     Pause_A,
     RunningPump_B,
