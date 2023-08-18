@@ -32,7 +32,7 @@
 #include "main_types.h"
 
 #define VERSION_MAJOR 2
-#define VERSION_MINOR 3
+#define VERSION_MINOR 5
 
 #define ESC 0x1B
 
@@ -57,9 +57,9 @@
 //first loop from POR
 #define FIRST_LOOP 10
 #define PAUSE_TIME 2
-#define A_RUNTIME_STROMEK 6
-#define B_RUNTIME_KVETINAC 6
-#define C_RUNTIME_12VPUMP 31
+#define A_RUNTIME_STROMEK 4
+#define B_RUNTIME_KVETINAC 10
+#define C_RUNTIME_12VPUMP 50
 
 // Standardized LED and button names
 #define LED1_PIN        PC_13   // blackpill on-board led
