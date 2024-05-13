@@ -32,7 +32,7 @@
 #include "main_types.h"
 
 #define VERSION_MAJOR 2
-#define VERSION_MINOR 8
+#define VERSION_MINOR 9
 
 // FORCE_TIME_SETUP_MANUAL
 
