@@ -32,7 +32,9 @@
 #include "main_types.h"
 
 #define VERSION_MAJOR 2
-#define VERSION_MINOR 5
+#define VERSION_MINOR 8
+
+// FORCE_TIME_SETUP_MANUAL
 
 #define ESC 0x1B
 
@@ -109,7 +111,7 @@ int compare_times(ds3231_time_t *p_tA, ds3231_time_t *p_tB);
 void add2times(ds3231_time_t *p_target, uint32_t h_add, uint32_t m_add, uint32_t s_add);
 void process_state(e_EVENT event);
 void process_fan(float temp);
-void update_screen(e_BTN_EVENT btn_input, ds3231_time_t *p_now, ds3231_time_t *p_target );
+void update_screen(e_BTN_EVENT btn_input, ds3231_time_t *p_now, ds3231_time_t *p_target, uint8_t fatal_error = 0 );
 void set_next_time(ds3231_time_t *p_target);
 
 
@@ -226,8 +228,16 @@ int main()
     next_wattering_time = gl_time;
     set_next_time(&next_wattering_time);
 
-    if (compare_times(&gl_time, &next_wattering_time) == 1) {
-        add2times(&next_wattering_time, 2, 0, 0);
+
+    // until next wattering time is "before" gl_time, cycle through options
+    int setup_counter = 0;
+    while (compare_times(&gl_time, &next_wattering_time) == -1) {
+        printf("-- gltime before wattering time, go to next - cycle: %d\r\n", setup_counter);
+        set_next_time(&next_wattering_time);
+        setup_counter += 1;
+        if (setup_counter > 8) {
+            update_screen(e_BTN_EVENT::BtnNone, &gl_time, &next_wattering_time, 255);
+        }
     }
 
     HAL_Delay(2000);
@@ -270,6 +280,7 @@ int main()
             process_fan(rtcTempC);
 
             process_state(main_event);
+            
             HAL_Delay(5);
             //new epoch time fx
         }
@@ -451,7 +462,7 @@ void process_state(e_EVENT event) {
             state = e_SUIJIN_STATE::RunningPump_12V;
             flag_wattering_in_progress = true;
             fan_en.write(MOTOR_ENABLE);
-            printf("SMinf: Exit InitSetup\r\n");
+            printf("SMinf: Exit InitSetup  %d\r\n", time_now);
             //break;
 
         case e_SUIJIN_STATE::RunningPump_12V:
@@ -459,7 +470,7 @@ void process_state(e_EVENT event) {
             if (time_now > time_transition) {
                 time_transition = time_now + PAUSE_TIME;
                 state = e_SUIJIN_STATE::Pause_12V;
-                printf("SMinf: Exit Running Pump12V\r\n");
+                printf("SMinf: Exit Running Pump12V  %d\r\n", time_now);
             }
             break;
 
@@ -468,7 +479,7 @@ void process_state(e_EVENT event) {
             if (time_now > time_transition) {
                 time_transition = time_now + A_RUNTIME_STROMEK;
                 state = e_SUIJIN_STATE::RunningPump_A;
-                printf("SMinf: Exit Pause_12V\r\n");
+                printf("SMinf: Exit Pause_12V  %d\r\n", time_now);
             }
             break;
 
@@ -478,7 +489,7 @@ void process_state(e_EVENT event) {
             if (time_now > time_transition) {
                 time_transition = time_now + PAUSE_TIME;
                 state = e_SUIJIN_STATE::Pause_A;
-                printf("SMinf: Exit Running PumpA\r\n");
+                printf("SMinf: Exit Running PumpA  %d\r\n", time_now);
             }
             break;
 
@@ -487,7 +498,7 @@ void process_state(e_EVENT event) {
             if (time_now > time_transition) {
                 time_transition = time_now + B_RUNTIME_KVETINAC;
                 state = e_SUIJIN_STATE::RunningPump_B;
-                printf("SMinf: Exit Pause_A\r\n");
+                printf("SMinf: Exit Pause_A  %d\r\n", time_now);
             }
             break;
 
@@ -496,7 +507,7 @@ void process_state(e_EVENT event) {
             if (time_now > time_transition) {
                 time_transition = time_now + PAUSE_TIME;
                 state = e_SUIJIN_STATE::Pause_B;
-                printf("SMinf: Exit Running PumpB\r\n");
+                printf("SMinf: Exit Running PumpB  %d\r\n", time_now);
             }
             break;
 
@@ -505,7 +516,7 @@ void process_state(e_EVENT event) {
             if (time_now > time_transition) {
                 //time_transition = time_now + PAUSE_TIME;
                 state = e_SUIJIN_STATE::Appendix;
-                printf("SMinf: Exit Pause_B\r\n");
+                printf("SMinf: Exit Pause_B  %d\r\n", time_now);
             }
             break;
 
@@ -513,13 +524,13 @@ void process_state(e_EVENT event) {
             state = e_SUIJIN_STATE::WaitingForNextCycle;
             flag_wattering_in_progress = false;
             fan_en.write(MOTOR_DISABLE);
-            printf("SMinf: Exit Appendix\r\n");
+            printf("SMinf: Exit Appendix  %d\r\n", time_now);
             //break;
 
         case e_SUIJIN_STATE::WaitingForNextCycle:
             if (event == e_EVENT::EventTriggerWattering) {
                 state = e_SUIJIN_STATE::InitSetup;
-                printf("SMinf: Exit waiting\r\n");
+                printf("SMinf: Exit waiting  %d\r\n", time_now);
             }
             break;
     };
@@ -548,13 +559,20 @@ void process_fan(float tempC) {
     }
 }
 
-void update_screen(e_BTN_EVENT btn_input, ds3231_time_t *p_now, ds3231_time_t *p_target ) {
+void update_screen(e_BTN_EVENT btn_input, ds3231_time_t *p_now, ds3231_time_t *p_target, uint8_t fatal_error) {
     static e_MENU_SCREEN screen_set = e_MENU_SCREEN::ScrHome;
 
         // if (input_enter) {
         //     next_wattering_time = gl_time;
         //     add2times(&next_wattering_time , 0, 0, 21);
         // }
+
+    if (fatal_error != 0) {
+        if (fatal_error==255) { screen_set = e_MENU_SCREEN::ScrStartupError; };
+
+        // induce unknown state
+        screen_set = (e_MENU_SCREEN)199;
+    }
 
     switch (screen_set) {
         case e_MENU_SCREEN::ScrHome:
@@ -588,6 +606,26 @@ void update_screen(e_BTN_EVENT btn_input, ds3231_time_t *p_now, ds3231_time_t *p
                 screen_set = e_MENU_SCREEN::ScrHome;
             }
             break;
+        case e_MENU_SCREEN::ScrStartupError:
+            lcd.locate(0,0);
+            lcd.printf("Startup ERROR");
+            
+            big_pump_12V.write(MOTOR_DISABLE);
+            motor_A.write(MOTOR_DISABLE);
+            motor_B.write(MOTOR_DISABLE);
+            fan_en.write(MOTOR_DISABLE);
+            
+            lcd.locate(0,1);
+            lcd.printf("device halt E%d", fatal_error);
+
+            lcd.printf("deinit reported, waiting forever");
+            while (true) {
+                HAL_Delay(100000000);
+            }
+            HAL_RCC_DeInit();
+            LL_RCC_DeInit();
+            NVIC_SystemReset();
+            break;
         default:
             printf("Screen update ERROR: unknown state\r\n");
             break;
@@ -599,18 +637,23 @@ return;
 }
 
 void set_next_time(ds3231_time_t *p_target) {
-    if (p_target->hours > 20){
-        //after 9pm, next cycle is at 8:30am
-        p_target->hours=8;
-        p_target->minutes=00;
+    
+    printf("set time: request = %2d:%02d:%02d\n", p_target->hours, p_target->minutes, p_target->seconds);
+    //it later than 7:xx am
+    if (p_target->hours < 19){
+        // it must be a cycle 1 ¬= morning or manual
+        p_target->hours=19;
+        p_target->minutes=30;
         p_target->seconds=00;
+        printf("set time: %dh:%dm\n",p_target->hours, p_target->minutes);
         return;
     }
     else if (p_target->hours > 7){
-        //after 8:30am, next cycle is at 9pm
-        p_target->hours=21;
-        p_target->minutes=00;
+        // evening cycle was set, switch to the morning one
+        p_target->hours=7;
+        p_target->minutes=30;
         p_target->seconds=00;
+        printf("set time: %dh:%dm\n",p_target->hours, p_target->minutes);
         return;
     }
     else {
@@ -623,5 +666,6 @@ void set_next_time(ds3231_time_t *p_target) {
     //     p_target->seconds=00;
     //     return;
     // }
+    printf("set time: next = %2d:%02d:%02d\n", p_target->hours, p_target->minutes, p_target->seconds);
     return;
 }

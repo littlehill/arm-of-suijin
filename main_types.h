@@ -29,7 +29,14 @@ enum e_EVENT {
 
 enum e_MENU_SCREEN {
     ScrHome = 0,
-    ScrManualTrigger
+    ScrManualTrigger,
+    ScrStartupError = 255
+};
+
+enum e_FATAL_ERROR {
+    none = 0,
+    unknown = 199,
+    startup = 255
 };
 
 #define MOTOR_ENABLE 1
