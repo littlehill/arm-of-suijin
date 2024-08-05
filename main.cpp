@@ -32,7 +32,7 @@
 #include "main_types.h"
 
 #define VERSION_MAJOR 2
-#define VERSION_MINOR 9
+#define VERSION_MINOR 10
 
 // FORCE_TIME_SETUP_MANUAL
 
@@ -59,7 +59,7 @@
 //first loop from POR
 #define FIRST_LOOP 10
 #define PAUSE_TIME 2
-#define A_RUNTIME_STROMEK 4
+#define A_RUNTIME_STROMEK 10
 #define B_RUNTIME_KVETINAC 10
 #define C_RUNTIME_12VPUMP 50
 
@@ -496,7 +496,7 @@ void process_state(e_EVENT event) {
         case e_SUIJIN_STATE::Pause_A:
             motor_A.write(MOTOR_DISABLE);
             if (time_now > time_transition) {
-                time_transition = time_now + B_RUNTIME_KVETINAC;
+                time_transition = time_now + A_RUNTIME_STROMEK;
                 state = e_SUIJIN_STATE::RunningPump_B;
                 printf("SMinf: Exit Pause_A  %d\r\n", time_now);
             }
@@ -514,7 +514,7 @@ void process_state(e_EVENT event) {
         case e_SUIJIN_STATE::Pause_B:
             motor_B.write(MOTOR_DISABLE);
             if (time_now > time_transition) {
-                //time_transition = time_now + PAUSE_TIME;
+                time_transition = time_now + B_RUNTIME_KVETINAC;
                 state = e_SUIJIN_STATE::Appendix;
                 printf("SMinf: Exit Pause_B  %d\r\n", time_now);
             }
