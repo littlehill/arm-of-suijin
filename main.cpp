@@ -32,7 +32,7 @@
 #include "main_types.h"
 
 #define VERSION_MAJOR 2
-#define VERSION_MINOR 10
+#define VERSION_MINOR 11
 
 // FORCE_TIME_SETUP_MANUAL
 
@@ -61,7 +61,7 @@
 #define PAUSE_TIME 2
 #define A_RUNTIME_STROMEK 10
 #define B_RUNTIME_KVETINAC 10
-#define C_RUNTIME_12VPUMP 50
+#define C_RUNTIME_12VPUMP 80
 
 // Standardized LED and button names
 #define LED1_PIN        PC_13   // blackpill on-board led
